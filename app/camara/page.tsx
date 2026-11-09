@@ -117,6 +117,22 @@ export default function Camara() {
     enqueue([{ ...it, state: "queued" }]);
   }
 
+  async function logout() {
+    if (!me?.guest) return;
+    const pending = queue.current.length > 0 || running.current;
+    const msg = [
+      `¿No eres ${me.guest.name}? Saldrás para elegir otro nombre.`,
+      me.photoCount > 0 &&
+        `Las ${me.photoCount} ${me.photoCount === 1 ? "foto que ya tomaste se queda" : "fotos que ya tomaste se quedan"} con el nombre ${me.guest.name}.`,
+      pending && "⚠️ Todavía hay fotos subiéndose; si sales ahora podrían perderse.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    if (!confirm(msg)) return;
+    await api("/api/logout", { method: "POST" }).catch(() => {});
+    router.replace("/");
+  }
+
   const uploading = items.filter((i) => i.state === "queued" || i.state === "uploading").length;
   const failed = items.filter((i) => i.state === "error");
 
@@ -128,6 +144,11 @@ export default function Camara() {
       <section className="card p-6 text-center fade-up">
         <p className="text-muted text-sm">Hola,</p>
         <p className="title text-3xl font-semibold">{me?.guest?.name ?? "…"}</p>
+        {me?.guest && (
+          <button className="text-xs text-muted underline mt-1" onClick={logout}>
+            ¿No eres tú? Salir
+          </button>
+        )}
         <p className="mt-3 text-muted">
           Llevas <span className="text-gold-dark font-bold text-xl">{me?.photoCount ?? 0}</span>{" "}
           {me?.photoCount === 1 ? "foto" : "fotos"}

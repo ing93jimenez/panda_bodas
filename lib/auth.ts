@@ -24,6 +24,10 @@ export async function setGuestCookie(token: string) {
   (await cookies()).set(GUEST_COOKIE, token, { ...cookieOpts, maxAge: YEAR });
 }
 
+export async function clearGuestCookie() {
+  (await cookies()).delete(GUEST_COOKIE);
+}
+
 export async function currentGuest(): Promise<GuestRow | null> {
   const token = (await cookies()).get(GUEST_COOKIE)?.value;
   if (!token) return null;
