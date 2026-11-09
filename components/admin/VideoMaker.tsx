@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { browserDb } from "@/lib/supabase/browser";
-import { estimateDuration, renderVideo, type VideoFormat } from "@/lib/video/render";
+import { buildSegments, estimateDuration, renderVideo, type VideoFormat } from "@/lib/video/render";
+import { useFeaturedMessages } from "@/components/FeaturedMessages";
 import type { AdminState } from "./types";
 
 function formatDate(d: string | null) {
@@ -23,6 +24,10 @@ export function VideoMaker({ state, onDone }: { state: AdminState; onDone: () =>
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const featured = useFeaturedMessages(60000);
+  const [withMessages, setWithMessages] = useState(true);
+  const usedMessages = withMessages ? featured : [];
+  const segmentCount = buildSegments(Math.min(count, max), usedMessages.length).length;
 
   const chosen = ranked.slice(0, count);
   const winner = state.board.find((b) => b.guestId === state.event.winner_guest_id)?.name ?? (state.board[0]?.eligible ? state.board[0].name : null);
@@ -41,6 +46,7 @@ export function VideoMaker({ state, onDone }: { state: AdminState; onDone: () =>
         winnerName: winner,
         music,
         secondsPerPhoto: spp,
+        messages: usedMessages.map((m) => ({ name: m.name, body: m.body })),
         canvas: canvasRef.current ?? undefined,
         onProgress: (f, label) => setProgress({ f, label }),
       });
@@ -93,7 +99,7 @@ export function VideoMaker({ state, onDone }: { state: AdminState; onDone: () =>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-semibold">Segundos por foto: {spp}</span>
           <input type="range" min={2} max={7} value={spp} onChange={(e) => setSpp(+e.target.value)} disabled={busy} />
-          <span className="text-muted text-xs">Duración aprox.: {Math.round(estimateDuration(count, spp))} s</span>
+          <span className="text-muted text-xs">Duración aprox.: {Math.round(estimateDuration(segmentCount, spp))} s</span>
         </label>
         <div className="flex flex-col gap-1 text-sm">
           <span className="font-semibold">Formato</span>
@@ -110,6 +116,13 @@ export function VideoMaker({ state, onDone }: { state: AdminState; onDone: () =>
             ))}
           </div>
         </div>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={withMessages} onChange={(e) => setWithMessages(e.target.checked)} disabled={busy} />
+          <span>
+            Intercalar dedicatorias destacadas ({featured.length})
+            {!featured.length && <span className="text-muted"> — destácalas con ⭐ en la pestaña Dedicatorias</span>}
+          </span>
+        </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-semibold">Canción (MP3, opcional)</span>
           <input type="file" accept="audio/*" onChange={(e) => setMusic(e.target.files?.[0] ?? null)} disabled={busy} className="text-xs" />

@@ -15,6 +15,8 @@ export interface RenderOptions {
   title: string; // nombres de los novios
   subtitle?: string; // fecha
   winnerName?: string | null;
+  /** Dedicatorias destacadas que se intercalan entre las fotos. */
+  messages?: { name: string; body: string }[];
   music?: File | null;
   secondsPerPhoto?: number;
   onProgress?: (fraction: number, label: string) => void;
@@ -40,6 +42,21 @@ export function pickMimeType(): { mime: string; ext: "mp4" | "webm" } {
   ];
   for (const [mime, ext] of candidates) if (MediaRecorder.isTypeSupported(mime)) return { mime, ext };
   throw new Error("Este navegador no puede grabar video. Usa Chrome en una computadora.");
+}
+
+type Segment = { kind: "photo"; i: number } | { kind: "msg"; i: number };
+
+/** Intercala las dedicatorias de forma pareja entre las fotos (nunca al principio). */
+export function buildSegments(nPhotos: number, nMessages: number): Segment[] {
+  const segs: Segment[] = [];
+  const m = Math.min(nMessages, Math.max(0, nPhotos - 1));
+  const every = m ? nPhotos / (m + 1) : Infinity;
+  let used = 0;
+  for (let i = 0; i < nPhotos; i++) {
+    segs.push({ kind: "photo", i });
+    if (used < m && i + 1 >= Math.round(every * (used + 1))) segs.push({ kind: "msg", i: used++ });
+  }
+  return segs;
 }
 
 export function estimateDuration(n: number, secondsPerPhoto = 4) {
@@ -72,7 +89,9 @@ export async function renderVideo(opts: RenderOptions): Promise<{ blob: Blob; ex
     bitmaps.push(await loadBitmap(photos[i].url));
   }
 
-  const total = estimateDuration(photos.length, spp);
+  const messages = opts.messages ?? [];
+  const segments = buildSegments(photos.length, messages.length);
+  const total = estimateDuration(segments.length, spp);
   const serif = getComputedStyle(document.body).getPropertyValue("--font-serif").trim() || "Georgia, serif";
   const s = Math.min(W, H) / 1080; // escala tipográfica
 
@@ -141,11 +160,17 @@ export async function renderVideo(opts: RenderOptions): Promise<{ blob: Blob; ex
     ctx.drawImage(bmp, (W - w) / 2 + dx, (H - h) / 2 + dy - (format === "9:16" ? 60 * s : 0), w, h);
     ctx.restore();
   }
-  function text(str: string, x: number, y: number, size: number, opts: { color?: string; font?: string; alpha?: number; weight?: number } = {}) {
+  function text(
+    str: string,
+    x: number,
+    y: number,
+    size: number,
+    opts: { color?: string; font?: string; alpha?: number; weight?: number; italic?: boolean } = {},
+  ) {
     ctx.save();
     ctx.globalAlpha = opts.alpha ?? 1;
     ctx.fillStyle = opts.color ?? IVORY;
-    ctx.font = `${opts.weight ?? 600} ${size}px ${opts.font ?? serif}`;
+    ctx.font = `${opts.italic ? "italic " : ""}${opts.weight ?? 600} ${size}px ${opts.font ?? serif}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.shadowColor = "rgba(0,0,0,0.6)";
@@ -192,19 +217,54 @@ export async function renderVideo(opts: RenderOptions): Promise<{ blob: Blob; ex
     if (ph.score) text("★".repeat(ph.score), W / 2, y + 70 * s, 40 * s, { color: GOLD, alpha, font: "sans-serif" });
   }
 
+  function wrap(str: string, maxWidth: number, size: number): string[] {
+    ctx.font = `italic 500 ${size}px ${serif}`;
+    const words = str.replace(/\s+/g, " ").trim().split(" ");
+    const lines: string[] = [];
+    let line = "";
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = w;
+      } else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function messageAt(i: number, alpha: number) {
+    const m = messages[i];
+    card(alpha, () => {
+      let size = 64 * s;
+      let lines = wrap(`“${m.body}”`, W * 0.78, size);
+      while (lines.length > (format === "9:16" ? 12 : 7) && size > 30 * s) {
+        size -= 4 * s;
+        lines = wrap(`“${m.body}”`, W * 0.78, size);
+      }
+      const lh = size * 1.3;
+      const top = H / 2 - (lines.length * lh) / 2 - 40 * s;
+      text("💌 Dedicatoria", W / 2, top - 70 * s, 40 * s, { color: GOLD, alpha, weight: 500 });
+      lines.forEach((l, k) => text(l, W / 2, top + k * lh + lh / 2, size, { alpha, weight: 500, font: serif, italic: true }));
+      text(`— ${m.name}`, W / 2, top + lines.length * lh + 60 * s, 46 * s, { color: GOLD, alpha });
+    });
+  }
+
   function frame(t: number) {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, H);
     const photosStart = INTRO;
-    const photosEnd = INTRO + photos.length * spp;
+    const photosEnd = INTRO + segments.length * spp;
 
     // Fotos: cada una aparece con fundido sobre la anterior, que sigue debajo hasta cubrirse.
-    for (let i = 0; i < photos.length; i++) {
-      const start = photosStart + i * spp - FADE;
+    for (let k = 0; k < segments.length; k++) {
+      const start = photosStart + k * spp - FADE;
       const end = start + spp + FADE;
       if (t < start || t > end) continue;
       const local = t - start;
-      photoAt(i, local, clamp(local / FADE));
+      const seg = segments[k];
+      if (seg.kind === "photo") photoAt(seg.i, local, clamp(local / FADE));
+      else messageAt(seg.i, clamp(local / FADE));
     }
 
     // Intro

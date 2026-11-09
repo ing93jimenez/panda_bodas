@@ -2,13 +2,14 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { env } from "@/lib/env";
-import { SCORE_PROMPT, ScoreSchema, type ScoreResult } from "./prompt";
+import { buildPrompt, ScoreSchema, type ScoreResult } from "./prompt";
 
 let client: Anthropic | null = null;
 
 export async function scoreWithClaude(
   imageBase64: string,
   mediaType: "image/jpeg" | "image/png" | "image/webp",
+  challenge?: string,
 ): Promise<ScoreResult> {
   const apiKey = env.anthropicKey();
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no configurada");
@@ -23,7 +24,7 @@ export async function scoreWithClaude(
         role: "user",
         content: [
           { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-          { type: "text", text: SCORE_PROMPT },
+          { type: "text", text: buildPrompt(challenge) },
         ],
       },
     ],

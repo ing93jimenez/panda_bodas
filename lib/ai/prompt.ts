@@ -4,6 +4,7 @@ export const ScoreSchema = z.object({
   score: z.number().int().min(1).max(5),
   fine_score: z.number().int().min(0).max(100),
   reason: z.string(),
+  challenge_met: z.boolean(),
 });
 export type ScoreResult = z.infer<typeof ScoreSchema>;
 
@@ -26,4 +27,15 @@ Escala:
 Devuelve:
 - score: entero de 1 a 5.
 - fine_score: entero de 0 a 100 para desempatar fotos con las mismas estrellas (coherente con score).
-- reason: una frase corta en español explicando la calificación.`;
+- reason: una frase corta en español explicando la calificación.
+- challenge_met: true solo si se indica un reto abajo y la foto lo cumple claramente; si no hay reto, false.`;
+
+/** Arma el prompt; si la foto declara un reto, se pide verificarlo. */
+export function buildPrompt(challenge?: string): string {
+  if (!challenge) return SCORE_PROMPT + "\n\nReto: (ninguno)";
+  return (
+    SCORE_PROMPT +
+    `\n\nReto que el invitado dice cumplir con esta foto: «${challenge}».` +
+    " Verifica si la foto realmente lo cumple. El reto no cambia la calificación de estrellas."
+  );
+}

@@ -8,7 +8,13 @@ App web para que los invitados tomen/suban fotos desde el celular (sin poder bor
 - `/ranking` – ranking de fotógrafos en vivo (sin fotos)
 - `/resultados` – revelación final (ganador, top, video, descargas)
 - `/proyector` – vista para pantalla del salón (clic para avanzar)
-- `/admin` – panel de los novios (PIN)
+- `/dedicatoria` – dedicatoria para los novios (texto y/o nota de voz)
+- `/admin` – panel de los novios (PIN): invitados, fotos (mover/eliminar/corregir), retos, dedicatorias, video
+
+## Funciones clave
+- **Sin señal no se pierde nada**: cada foto se guarda primero en el celular (IndexedDB) y se sube sola cuando hay conexión; una clave única evita duplicados. Fotos tomadas antes del cierre se aceptan hasta 24 h después.
+- **Retos fotográficos**: la IA verifica que la foto cumpla el reto; cada reto distinto cumplido suma su bono al promedio.
+- **Dedicatorias**: las destacadas (⭐) salen en el proyector, en los resultados y en el video.
 
 ## Variables de entorno
 | Variable | Descripción |

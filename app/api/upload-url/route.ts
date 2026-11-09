@@ -4,8 +4,12 @@ import { db, BUCKET } from "@/lib/supabase/admin";
 import { currentGuest } from "@/lib/auth";
 import { getEvent } from "@/lib/data";
 import { fail, ok } from "@/lib/http";
+import { acceptsPhoto } from "@/lib/acceptance";
 
-const Body = z.object({ contentType: z.enum(["image/jpeg", "image/png", "image/webp"]) });
+const Body = z.object({
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  capturedAt: z.iso.datetime().optional(),
+});
 const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
 const MAX_PHOTOS_PER_GUEST = 300;
 
@@ -15,7 +19,7 @@ export async function POST(req: Request) {
   const me = await currentGuest();
   if (!me) return fail("Primero elige tu nombre", 401);
   const event = await getEvent();
-  if (event.status !== "live") return fail("El evento ya terminó; no se reciben más fotos", 403);
+  if (!acceptsPhoto(event, parsed.data.capturedAt)) return fail("El evento ya terminó; no se reciben más fotos", 403);
 
   const { count } = await db().from("photos").select("id", { count: "exact", head: true }).eq("guest_id", me.id);
   if ((count ?? 0) >= MAX_PHOTOS_PER_GUEST) return fail("Llegaste al máximo de fotos permitidas", 429);

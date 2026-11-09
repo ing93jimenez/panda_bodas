@@ -34,6 +34,29 @@ export interface PhotoRow {
   manual_override: boolean;
   error: string | null;
   deleted_at: string | null;
+  client_key: string | null;
+  captured_at: string | null;
+  challenge_id: string | null;
+  challenge_ok: boolean | null;
+  challenge_manual: boolean;
+  created_at: string;
+}
+
+export interface ChallengeRow {
+  id: string;
+  title: string;
+  bonus: number;
+  sort: number;
+  active: boolean;
+}
+
+export interface MessageRow {
+  id: string;
+  guest_id: string;
+  body: string | null;
+  audio_path: string | null;
+  featured: boolean;
+  deleted_at: string | null;
   created_at: string;
 }
 
@@ -42,6 +65,13 @@ export interface LeaderboardEntry {
   name: string;
   photos: number;
   scored: number;
+  /** Promedio de estrellas de sus fotos calificadas. */
   average: number | null;
+  /** Retos distintos cumplidos (verificados). */
+  challenges: number;
+  /** Puntos extra por retos. */
+  bonus: number;
+  /** Puntaje final = promedio + bonus. Es lo que decide el ranking. */
+  total: number | null;
   eligible: boolean;
 }

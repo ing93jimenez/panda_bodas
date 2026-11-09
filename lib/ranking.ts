@@ -1,39 +1,50 @@
 import type { GuestRow, LeaderboardEntry, PhotoRow } from "./types";
 
 type GuestLite = Pick<GuestRow, "id" | "name">;
-type PhotoLite = Pick<PhotoRow, "id" | "guest_id" | "score" | "fine_score" | "created_at">;
+type PhotoLite = Pick<PhotoRow, "id" | "guest_id" | "score" | "fine_score" | "created_at"> &
+  Partial<Pick<PhotoRow, "challenge_id" | "challenge_ok">>;
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * Ranking de fotógrafos: promedio de estrellas de sus fotos calificadas.
+ * Ranking de fotógrafos.
+ * Puntaje = promedio de estrellas de sus fotos calificadas + bonus por cada reto
+ * DISTINTO cumplido (verificado por la IA o el admin).
  * Solo es elegible quien tiene al menos `minPhotos` fotos calificadas.
- * Orden: elegibles primero, luego promedio desc, luego nº de fotos desc, luego nombre.
+ * Orden: elegibles primero, puntaje desc, nº de fotos desc, nombre.
  */
 export function buildLeaderboard(
   guests: GuestLite[],
   photos: PhotoLite[],
   minPhotos: number,
+  challengeBonus: Map<string, number> = new Map(),
 ): LeaderboardEntry[] {
-  const byGuest = new Map<string, { total: number; scored: number; sum: number }>();
+  const byGuest = new Map<string, { total: number; scored: number; sum: number; done: Set<string> }>();
   for (const p of photos) {
-    const s = byGuest.get(p.guest_id) ?? { total: 0, scored: 0, sum: 0 };
+    const s = byGuest.get(p.guest_id) ?? { total: 0, scored: 0, sum: 0, done: new Set<string>() };
     s.total++;
     if (p.score != null) {
       s.scored++;
       s.sum += p.score;
     }
+    if (p.challenge_id && p.challenge_ok && challengeBonus.has(p.challenge_id)) s.done.add(p.challenge_id);
     byGuest.set(p.guest_id, s);
   }
 
   return guests
     .map((g) => {
-      const s = byGuest.get(g.id) ?? { total: 0, scored: 0, sum: 0 };
-      const average = s.scored ? Math.round((s.sum / s.scored) * 100) / 100 : null;
+      const s = byGuest.get(g.id) ?? { total: 0, scored: 0, sum: 0, done: new Set<string>() };
+      const average = s.scored ? round2(s.sum / s.scored) : null;
+      const bonus = round2([...s.done].reduce((acc, id) => acc + (challengeBonus.get(id) ?? 0), 0));
       return {
         guestId: g.id,
         name: g.name,
         photos: s.total,
         scored: s.scored,
         average,
+        challenges: s.done.size,
+        bonus,
+        total: average == null ? null : round2(average + bonus),
         eligible: s.scored >= minPhotos,
       };
     })
@@ -41,7 +52,7 @@ export function buildLeaderboard(
     .sort(
       (a, b) =>
         Number(b.eligible) - Number(a.eligible) ||
-        (b.average ?? 0) - (a.average ?? 0) ||
+        (b.total ?? 0) - (a.total ?? 0) ||
         b.scored - a.scored ||
         a.name.localeCompare(b.name, "es"),
     );

@@ -8,9 +8,11 @@ import { api, ApiError, startPolling } from "@/lib/api";
 import { Leaderboard } from "@/components/Leaderboard";
 import { QR } from "@/components/QR";
 import { VideoMaker } from "@/components/admin/VideoMaker";
+import { ChallengesAdmin } from "@/components/admin/ChallengesAdmin";
+import { MessagesAdmin } from "@/components/admin/MessagesAdmin";
 import type { AdminState } from "@/components/admin/types";
 
-type Tab = "resumen" | "invitados" | "fotos" | "video";
+type Tab = "resumen" | "invitados" | "fotos" | "retos" | "dedicatorias" | "video";
 
 export default function Admin() {
   const [state, setState] = useState<AdminState | null>(null);
@@ -65,6 +67,8 @@ export default function Admin() {
             ["resumen", "Resumen"],
             ["invitados", `Invitados (${state.guests.length})`],
             ["fotos", `Fotos (${state.stats.total})`],
+            ["retos", "🎯 Retos"],
+            ["dedicatorias", "💌 Dedicatorias"],
             ["video", "Video"],
           ] as [Tab, string][]
         ).map(([k, label]) => (
@@ -77,6 +81,8 @@ export default function Admin() {
       {tab === "resumen" && <Summary state={state} onChange={load} />}
       {tab === "invitados" && <Guests state={state} onChange={load} />}
       {tab === "fotos" && <Photos state={state} onChange={load} />}
+      {tab === "retos" && <ChallengesAdmin onChange={load} />}
+      {tab === "dedicatorias" && <MessagesAdmin />}
       {tab === "video" && <VideoMaker state={state} onDone={load} />}
     </main>
   );
@@ -329,6 +335,11 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
     setBusy("");
   }
 
+  async function setChallengeOk(id: string, challengeOk: boolean) {
+    await api("/api/admin/photo", { method: "PATCH", json: { id, challengeOk } });
+    onChange();
+  }
+
   async function setScore(id: string, score: number) {
     await api("/api/admin/photo", { method: "PATCH", json: { id, score } });
     onChange();
@@ -445,6 +456,23 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
                     : "⏳ calificando"}
               </p>
               {p.reason && <p className="text-ink/80 text-[13px] leading-snug">{p.reason}</p>}
+              {p.challenge && (
+                <div className="rounded-md bg-cream px-2 py-1">
+                  <p>
+                    🎯 {p.challenge.title}:{" "}
+                    <b>{p.challenge.ok === true ? "✅ cumplido" : p.challenge.ok === false ? "❌ no cumplido" : "⏳ revisando"}</b>
+                    {p.challenge.manual && <span className="text-muted"> (manual)</span>}
+                  </p>
+                  <div className="flex gap-3 mt-0.5">
+                    <button className="underline text-gold-dark" onClick={() => setChallengeOk(p.id, true)}>
+                      marcar cumplido
+                    </button>
+                    <button className="underline text-red-800" onClick={() => setChallengeOk(p.id, false)}>
+                      no cumplido
+                    </button>
+                  </div>
+                </div>
+              )}
               {p.error && (
                 <details className="text-red-700">
                   <summary className="cursor-pointer">Ver detalle del error</summary>

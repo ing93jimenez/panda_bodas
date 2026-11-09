@@ -12,14 +12,21 @@ export function InAppCamera({
   onCapture,
   onClose,
   onUnavailable,
-  uploading,
+  pending,
+  online,
   photoCount,
+  challenge,
+  onClearChallenge,
 }: {
   onCapture: (file: File) => void;
   onClose: () => void;
   onUnavailable: () => void;
-  uploading: number;
+  /** Fotos guardadas en el celular esperando subirse. */
+  pending: number;
+  online: boolean;
   photoCount: number;
+  challenge: string | null;
+  onClearChallenge: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -113,9 +120,24 @@ export function InAppCamera({
           ✕ Listo
         </button>
         <span className="rounded-full bg-black/50 px-3 py-1.5">
-          {uploading > 0 ? `Subiendo ${uploading}…` : `${photoCount} ${photoCount === 1 ? "foto" : "fotos"} ✓`}
+          {pending > 0
+            ? online
+              ? `Subiendo ${pending}…`
+              : `📶 ${pending} guardadas, esperando señal`
+            : `${photoCount} ${photoCount === 1 ? "foto" : "fotos"} ✓`}
         </span>
       </div>
+      {challenge && (
+        <div className="absolute top-16 inset-x-0 flex justify-center px-4 mt-[env(safe-area-inset-top)]">
+          <button
+            onClick={onClearChallenge}
+            className="rounded-full bg-black/60 text-white text-sm px-4 py-2 max-w-full truncate"
+            title="Quitar reto"
+          >
+            🎯 {challenge} <span className="opacity-70">✕</span>
+          </button>
+        </div>
+      )}
 
       <div className="absolute bottom-0 inset-x-0 flex items-center justify-around pb-[max(2rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-black/60 to-transparent">
         <span className="w-14 text-center text-white text-xs">{shots > 0 && `+${shots}`}</span>

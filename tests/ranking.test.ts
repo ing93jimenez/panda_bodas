@@ -56,3 +56,46 @@ describe("rankPhotos", () => {
     expect(rankPhotos([p3, p4, p1, p5, p2]).map((p) => p.id)).toEqual([p2.id, p1.id, p4.id, p3.id]);
   });
 });
+
+describe("bonus por retos", () => {
+  const gs = [
+    { id: "a", name: "Ana" },
+    { id: "b", name: "Beto" },
+  ];
+  let k = 100;
+  const ph = (guest_id: string, score: number, challenge_id?: string, challenge_ok?: boolean | null) => ({
+    id: `q${++k}`,
+    guest_id,
+    score,
+    fine_score: null,
+    created_at: `2026-01-01T00:01:${String(k % 60).padStart(2, "0")}Z`,
+    challenge_id: challenge_id ?? null,
+    challenge_ok: challenge_ok ?? null,
+  });
+  const bonus = new Map([
+    ["r1", 0.1],
+    ["r2", 0.25],
+  ]);
+
+  it("suma el bono una sola vez por reto distinto cumplido", () => {
+    const board = buildLeaderboard(
+      gs,
+      [ph("a", 4, "r1", true), ph("a", 4, "r1", true), ph("a", 4, "r2", true), ph("b", 4, "r1", false)],
+      1,
+      bonus,
+    );
+    const ana = board.find((e) => e.name === "Ana")!;
+    expect(ana).toMatchObject({ average: 4, challenges: 2, bonus: 0.35, total: 4.35 });
+    expect(board.find((e) => e.name === "Beto")).toMatchObject({ challenges: 0, bonus: 0, total: 4 });
+  });
+
+  it("los retos pueden voltear el ranking", () => {
+    const board = buildLeaderboard(gs, [ph("a", 4, "r2", true), ph("b", 4.2 as number)], 1, bonus);
+    expect(board.map((e) => e.name)).toEqual(["Ana", "Beto"]);
+  });
+
+  it("retos eliminados o pendientes no suman", () => {
+    const board = buildLeaderboard(gs, [ph("a", 3, "borrado", true), ph("a", 3, "r1", null)], 1, bonus);
+    expect(board[0]).toMatchObject({ bonus: 0, total: 3 });
+  });
+});

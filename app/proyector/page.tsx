@@ -8,6 +8,7 @@ import type { LeaderboardEntry } from "@/lib/types";
 import { Leaderboard } from "@/components/Leaderboard";
 import { QR } from "@/components/QR";
 import { Stars } from "@/components/Stars";
+import { MessageTicker, useFeaturedMessages } from "@/components/FeaturedMessages";
 
 type Live = {
   event: { status: string; coupleNames: string; minPhotos: number };
@@ -23,6 +24,7 @@ export default function Proyector() {
   const [slide, setSlide] = useState(0);
   const origin = useOrigin();
   const started = useRef(false);
+  const messages = useFeaturedMessages();
 
 
   useEffect(
@@ -75,8 +77,13 @@ export default function Proyector() {
             <p className="uppercase tracking-[0.4em] text-muted text-xl">Ranking de fotógrafos</p>
             <h1 className="title text-7xl font-semibold mb-6">{live.event.coupleNames}</h1>
             <div className="overflow-hidden flex-1">
-              <Leaderboard board={live.board.slice(0, 8)} minPhotos={live.event.minPhotos} big />
+              <Leaderboard board={live.board.slice(0, messages.length ? 5 : 8)} minPhotos={live.event.minPhotos} big />
             </div>
+            {messages.length > 0 && (
+              <div className="card px-10 py-6 mt-6">
+                <MessageTicker messages={messages} big />
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-center justify-center text-center gap-4 w-[420px]">
             <div className="card p-6">{origin && <QR url={origin} size={340} />}</div>
@@ -104,6 +111,8 @@ export default function Proyector() {
               <Stars value={results.winner.average} className="text-7xl" />
               <p className="text-3xl text-muted mt-4">
                 Promedio {results.winner.average?.toFixed(2)} ★ en {results.winner.scored} fotos
+              {results.winner.challenges > 0 &&
+                ` · 🎯 ${results.winner.challenges} ${results.winner.challenges === 1 ? "reto" : "retos"} (+${results.winner.bonus.toFixed(2)})`}
               </p>
             </>
           ) : (

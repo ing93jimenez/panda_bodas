@@ -2,7 +2,7 @@ import "server-only";
 import { db, BUCKET } from "@/lib/supabase/admin";
 import { scoreImage } from "@/lib/ai/score";
 import { buildLeaderboard, pickWinner, rankPhotos } from "@/lib/ranking";
-import type { EventRow, GuestRow, PhotoRow } from "@/lib/types";
+import type { ChallengeRow, EventRow, GuestRow, PhotoRow } from "@/lib/types";
 
 export async function getEvent(): Promise<EventRow> {
   const { data, error } = await db().from("event").select("*").eq("id", 1).single();
@@ -25,9 +25,24 @@ export async function getPhotos(opts?: { includeDeleted?: boolean }): Promise<Ph
   return data as PhotoRow[];
 }
 
+export async function getChallenges(opts?: { activeOnly?: boolean }): Promise<ChallengeRow[]> {
+  let q = db().from("challenges").select("id,title,bonus,sort,active").order("sort").order("created_at");
+  if (opts?.activeOnly) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map((c) => ({ ...c, bonus: Number(c.bonus) })) as ChallengeRow[];
+}
+
 export async function getLeaderboard() {
-  const [event, guests, photos] = await Promise.all([getEvent(), getGuests(), getPhotos()]);
-  return { event, board: buildLeaderboard(guests, photos, event.min_photos_for_winner), photos, guests };
+  const [event, guests, photos, challenges] = await Promise.all([getEvent(), getGuests(), getPhotos(), getChallenges()]);
+  const bonus = new Map(challenges.map((c) => [c.id, c.bonus]));
+  return {
+    event,
+    board: buildLeaderboard(guests, photos, event.min_photos_for_winner, bonus),
+    photos,
+    guests,
+    challenges,
+  };
 }
 
 export async function signedUrls(paths: string[], opts?: { download?: boolean }) {
@@ -61,18 +76,19 @@ export async function scorePhoto(photoId: string): Promise<void> {
       | "image/png"
       | "image/webp";
     const b64 = Buffer.from(await blob.arrayBuffer()).toString("base64");
-    const r = await scoreImage(b64, mediaType);
-    await db()
-      .from("photos")
-      .update({
-        status: "scored",
-        score: r.score,
-        fine_score: r.fine_score,
-        ai_reason: r.reason,
-        ai_provider: r.provider,
-      })
-      .eq("id", photoId)
-      .eq("manual_override", false);
+    let challenge: string | undefined;
+    if (photo.challenge_id) {
+      const { data: c } = await db().from("challenges").select("title").eq("id", photo.challenge_id).maybeSingle();
+      challenge = c?.title;
+    }
+    const r = await scoreImage(b64, mediaType, challenge);
+    const update: Record<string, unknown> = {
+      status: "scored",
+      ai_provider: r.provider,
+    };
+    if (!photo.manual_override) Object.assign(update, { score: r.score, fine_score: r.fine_score, ai_reason: r.reason });
+    if (challenge && !photo.challenge_manual) update.challenge_ok = r.challenge_met;
+    await db().from("photos").update(update).eq("id", photoId);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("Error calificando", photoId, message);

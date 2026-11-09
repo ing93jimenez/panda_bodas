@@ -7,11 +7,14 @@ import type { Results } from "@/lib/results";
 import { Header } from "@/components/Header";
 import { Leaderboard } from "@/components/Leaderboard";
 import { Stars } from "@/components/Stars";
+import Link from "next/link";
+import { useFeaturedMessages } from "@/components/FeaturedMessages";
 
 export default function Resultados() {
   const router = useRouter();
   const [data, setData] = useState<Results | null>(null);
   const [open, setOpen] = useState<Results["top"][number] | null>(null);
+  const messages = useFeaturedMessages(60000);
 
   useEffect(
     () =>
@@ -38,6 +41,8 @@ export default function Resultados() {
             <Stars value={data.winner.average} className="text-2xl" />
             <p className="text-muted text-sm mt-1">
               Promedio {data.winner.average?.toFixed(2)} ★ en {data.winner.scored} fotos
+              {data.winner.challenges > 0 &&
+                ` · 🎯 ${data.winner.challenges} ${data.winner.challenges === 1 ? "reto" : "retos"} (+${data.winner.bonus.toFixed(2)})`}
             </p>
           </>
         ) : (
@@ -73,10 +78,28 @@ export default function Resultados() {
         </section>
       )}
 
+      {messages.length > 0 && (
+        <section className="mt-10">
+          <h2 className="title text-3xl font-semibold text-center mb-4">Dedicatorias 💌</h2>
+          <ul className="flex flex-col gap-3">
+            {messages.map((m) => (
+              <li key={m.id} className="card p-4">
+                <p className="title text-xl italic">“{m.body}”</p>
+                <p className="text-sm text-muted mt-1">— {m.name}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="mt-10">
         <h2 className="title text-3xl font-semibold text-center mb-4">Ranking final</h2>
         <Leaderboard board={data.board} minPhotos={data.event.minPhotos} highlightId={data.winner?.guestId} />
       </section>
+
+      <Link href="/dedicatoria" className="btn btn-outline mt-8 self-center">
+        💌 Dejar una dedicatoria a los novios
+      </Link>
 
       {open && (
         <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4" onClick={() => setOpen(null)}>

@@ -70,3 +70,41 @@ alter table public.event add column top_count int not null default 10 check (top
 -- 0003: eliminación por el admin (papelera recuperable; los invitados nunca pueden borrar)
 alter table public.photos add column deleted_at timestamptz;
 create index photos_deleted_idx on public.photos (deleted_at);
+
+-- 0004: subida sin conexión, retos fotográficos y dedicatorias
+alter table public.photos add column client_key text;
+create unique index photos_client_key_unique on public.photos (guest_id, client_key) where client_key is not null;
+alter table public.photos add column captured_at timestamptz;
+
+create table public.challenges (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 1 and 120),
+  bonus numeric(3,2) not null default 0.10 check (bonus >= 0 and bonus <= 1),
+  sort int not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.challenges enable row level security;
+
+alter table public.photos add column challenge_id uuid references public.challenges(id) on delete set null;
+alter table public.photos add column challenge_ok boolean;
+alter table public.photos add column challenge_manual boolean not null default false;
+create index photos_challenge_idx on public.photos (challenge_id);
+
+create table public.messages (
+  id uuid primary key default gen_random_uuid(),
+  guest_id uuid not null references public.guests(id) on delete restrict,
+  body text check (body is null or char_length(body) <= 600),
+  audio_path text,
+  featured boolean not null default false,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  check (body is not null or audio_path is not null)
+);
+create index messages_guest_idx on public.messages (guest_id);
+alter table public.messages enable row level security;
+
+update storage.buckets
+set allowed_mime_types = array['image/jpeg','image/png','image/webp','video/mp4','video/webm',
+                               'audio/mp4','audio/webm','audio/mpeg','audio/aac','audio/ogg','audio/x-m4a']
+where id = 'media';

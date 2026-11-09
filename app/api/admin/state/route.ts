@@ -9,7 +9,7 @@ export async function GET() {
   await connection();
   const denied = await requireAdmin();
   if (denied) return denied;
-  const [{ event, board, photos, guests }, allPhotos] = await Promise.all([
+  const [{ event, board, photos, guests, challenges }, allPhotos] = await Promise.all([
     getLeaderboard(),
     getPhotos({ includeDeleted: true }),
   ]);
@@ -18,6 +18,7 @@ export async function GET() {
   const counts = new Map<string, number>();
   for (const p of photos) counts.set(p.guest_id, (counts.get(p.guest_id) ?? 0) + 1);
   const hasAny = new Set(allPhotos.map((p) => p.guest_id));
+  const challengeTitles = new Map(challenges.map((c) => [c.id, c.title]));
 
   const ranked = rankPhotos(photos);
   const rankIndex = new Map(ranked.map((p, i) => [p.id, i + 1]));
@@ -52,6 +53,9 @@ export async function GET() {
         createdAt: p.created_at,
         rank: rankIndex.get(p.id) ?? null,
         deleted: !!p.deleted_at,
+        challenge: p.challenge_id
+          ? { title: challengeTitles.get(p.challenge_id) ?? "", ok: p.challenge_ok, manual: p.challenge_manual }
+          : null,
       }))
       .sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || b.createdAt.localeCompare(a.createdAt)),
     stats: {

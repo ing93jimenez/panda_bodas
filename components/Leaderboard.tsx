@@ -31,12 +31,21 @@ export function Leaderboard({
             <p className={`font-semibold truncate ${big ? "text-3xl" : ""}`}>{e.name}</p>
             <p className={`text-muted ${big ? "text-xl" : "text-xs"}`}>
               {e.photos} {e.photos === 1 ? "foto" : "fotos"}
+              {e.challenges > 0 && ` · 🎯 ${e.challenges} ${e.challenges === 1 ? "reto" : "retos"}`}
               {!e.eligible && ` · necesita ${minPhotos} calificadas`}
             </p>
           </div>
           <div className="text-right">
             <Stars value={e.average} className={big ? "text-3xl" : "text-base"} />
-            <p className={`text-muted ${big ? "text-xl" : "text-xs"}`}>{e.average?.toFixed(2) ?? "—"}</p>
+            <p className={`text-muted ${big ? "text-xl" : "text-xs"}`}>
+              {e.total == null ? "—" : e.bonus > 0 ? (
+                <>
+                  {e.average?.toFixed(2)} + 🎯{e.bonus.toFixed(2)} = <b className="text-gold-dark">{e.total.toFixed(2)}</b>
+                </>
+              ) : (
+                e.total.toFixed(2)
+              )}
+            </p>
           </div>
         </li>
       ))}

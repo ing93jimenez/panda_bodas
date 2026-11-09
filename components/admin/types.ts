@@ -17,6 +17,7 @@ export type AdminPhoto = {
   createdAt: string;
   rank: number | null;
   deleted: boolean;
+  challenge: { title: string; ok: boolean | null; manual: boolean } | null;
 };
 
 export type AdminState = {

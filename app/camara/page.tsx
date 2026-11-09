@@ -1,50 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, ApiError, startPolling } from "@/lib/api";
-import { prepareImage } from "@/lib/compress";
-import { browserDb } from "@/lib/supabase/browser";
+import { api, startPolling } from "@/lib/api";
+import { addPhotos, getServerState, getState, retryStuck, subscribe } from "@/lib/uploadQueue";
 import { Header } from "@/components/Header";
 import { InAppCamera } from "@/components/InAppCamera";
+import { Challenges, type Challenge } from "@/components/Challenges";
 
 type Me = {
   guest: { id: string; name: string } | null;
   photoCount: number;
   event: { status: string; coupleNames: string };
 };
-type Item = { key: string; file: File; state: "queued" | "uploading" | "done" | "error"; error?: string };
-
-async function uploadOne(file: File): Promise<number> {
-  const prepared = await prepareImage(file);
-  const contentType = prepared.blob.type || "image/jpeg";
-  const { path, token } = await api<{ path: string; token: string }>("/api/upload-url", {
-    method: "POST",
-    json: { contentType },
-  });
-  const { error } = await browserDb().storage.from("media").uploadToSignedUrl(path, token, prepared.blob, {
-    contentType,
-    upsert: false,
-  });
-  if (error) throw new Error(error.message);
-  const r = await api<{ photoCount: number }>("/api/photos", {
-    method: "POST",
-    json: { path, width: prepared.width || undefined, height: prepared.height || undefined },
-  });
-  return r.photoCount;
-}
 
 export default function Camara() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
   const [flash, setFlash] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [nativeOnly, setNativeOnly] = useState(false);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
+  const [savedSome, setSavedSome] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
-  const running = useRef(false);
+  const queue = useSyncExternalStore(subscribe, getState, getServerState);
+
+  const loadChallenges = useCallback(() => {
+    api<{ challenges: Challenge[] }>("/api/challenges")
+      .then((r) => setChallenges(r.challenges))
+      .catch(() => {});
+  }, []);
 
   useEffect(
     () =>
@@ -56,87 +44,45 @@ export default function Camara() {
             else setMe(m);
           })
           .catch(() => {});
+        loadChallenges();
       }, 20000),
-    [router],
+    [router, loadChallenges],
   );
 
-  const queue = useRef<Item[]>([]);
-
-  const update = (key: string, patch: Partial<Item>) =>
-    setItems((cur) => cur.map((i) => (i.key === key ? { ...i, ...patch } : i)));
-
-  const pump = useCallback(async () => {
-    if (running.current) return;
-    running.current = true;
-    try {
-      let item: Item | undefined;
-      while ((item = queue.current.shift())) {
-        const it = item;
-        update(it.key, { state: "uploading" });
-        for (let attempt = 1; ; attempt++) {
-          try {
-            const count = await uploadOne(it.file);
-            setMe((m) => (m ? { ...m, photoCount: count } : m));
-            update(it.key, { state: "done" });
-            break;
-          } catch (e) {
-            const fatal = e instanceof ApiError && e.status < 500;
-            if (fatal || attempt >= 3) {
-              update(it.key, { state: "error", error: (e as Error).message });
-              if (e instanceof ApiError && e.status === 403) router.replace("/resultados");
-              break;
-            }
-            await new Promise((r) => setTimeout(r, 1500 * 2 ** attempt));
-          }
-        }
-      }
-    } finally {
-      running.current = false;
-    }
-  }, [router]);
-
-  function enqueue(list: Item[]) {
-    queue.current.push(...list);
-    void pump();
-  }
+  // El contador sube en cuanto el servidor confirma cada foto.
+  const photoCount = Math.max(me?.photoCount ?? 0, queue.photoCount ?? 0);
 
   function addFiles(files: FileList | File[] | null, withFlash = true) {
     if (!files?.length) return;
-    const add: Item[] = Array.from(files).map((file) => ({
-      key: `${Date.now()}-${Math.random()}`,
-      file,
-      state: "queued",
-    }));
-    setItems((cur) => [...add, ...cur]);
+    addPhotos(Array.from(files), activeChallenge?.id ?? null);
+    setSavedSome(true);
     if (withFlash) {
       setFlash(true);
       setTimeout(() => setFlash(false), 250);
     }
-    enqueue(add);
   }
 
   const onCameraUnavailable = useCallback(() => {
     setCameraOpen(false);
     setNativeOnly(true);
   }, []);
-  const onCapture = useCallback((file: File) => addFiles([file], false), []); // eslint-disable-line react-hooks/exhaustive-deps
-
-
-  function retry(key: string) {
-    const it = items.find((i) => i.key === key);
-    if (!it) return;
-    update(key, { state: "queued", error: undefined });
-    enqueue([{ ...it, state: "queued" }]);
-  }
+  const challengeId = activeChallenge?.id ?? null;
+  const onCapture = useCallback(
+    (file: File) => {
+      addPhotos([file], challengeId);
+      setSavedSome(true);
+    },
+    [challengeId],
+  );
 
   async function logout() {
     if (!me?.guest) return;
-    const pending = queue.current.length > 0 || running.current;
+    const pending = queue.pending > 0;
     const msg = [
       `¿No eres ${me.guest.name}? Saldrás para elegir otro nombre.`,
-      me.photoCount > 0 &&
-        `Las ${me.photoCount} ${me.photoCount === 1 ? "foto que ya tomaste se queda" : "fotos que ya tomaste se quedan"} con el nombre ${me.guest.name}.`,
-      pending && "⚠️ Todavía hay fotos subiéndose; si sales ahora podrían perderse.",
+      photoCount > 0 &&
+        `Las ${photoCount} ${photoCount === 1 ? "foto que ya tomaste se queda" : "fotos que ya tomaste se quedan"} con el nombre ${me.guest.name}.`,
+      pending && `⚠️ Hay ${queue.pending} fotos esperando señal; se subirán con el nombre que elijas después.`,
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -145,8 +91,7 @@ export default function Camara() {
     router.replace("/");
   }
 
-  const uploading = items.filter((i) => i.state === "queued" || i.state === "uploading").length;
-  const failed = items.filter((i) => i.state === "error");
+  const waiting = queue.pending;
 
   return (
     <main className="flex-1 flex flex-col max-w-md w-full mx-auto px-4 pb-10">
@@ -154,10 +99,16 @@ export default function Camara() {
       {cameraOpen && (
         <InAppCamera
           onCapture={onCapture}
-          onClose={() => setCameraOpen(false)}
+          onClose={() => {
+            setCameraOpen(false);
+            loadChallenges();
+          }}
           onUnavailable={onCameraUnavailable}
-          uploading={items.filter((i) => i.state === "queued" || i.state === "uploading").length}
-          photoCount={me?.photoCount ?? 0}
+          pending={waiting}
+          online={queue.online && !queue.waitingSignal}
+          photoCount={photoCount}
+          challenge={activeChallenge?.title ?? null}
+          onClearChallenge={() => setActiveChallenge(null)}
         />
       )}
       <Header coupleNames={me?.event.coupleNames} />
@@ -171,11 +122,22 @@ export default function Camara() {
           </button>
         )}
         <p className="mt-3 text-muted">
-          Llevas <span className="text-gold-dark font-bold text-xl">{me?.photoCount ?? 0}</span>{" "}
-          {me?.photoCount === 1 ? "foto" : "fotos"}
+          Llevas <span className="text-gold-dark font-bold text-xl">{photoCount}</span>{" "}
+          {photoCount === 1 ? "foto" : "fotos"}
         </p>
 
-        <div className="flex flex-col gap-3 mt-6">
+        {activeChallenge && (
+          <div className="mt-4 rounded-xl bg-cream px-3 py-2 text-sm flex items-center gap-2 justify-between">
+            <span className="text-left">
+              🎯 Reto activo: <b>{activeChallenge.title}</b>
+            </span>
+            <button className="text-xs underline text-muted shrink-0" onClick={() => setActiveChallenge(null)}>
+              Quitar
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 mt-5">
           <button
             className="btn btn-gold text-lg py-5"
             onClick={() => (nativeOnly ? cameraRef.current?.click() : setCameraOpen(true))}
@@ -219,39 +181,49 @@ export default function Camara() {
           }}
         />
 
-        {uploading > 0 && (
-          <p className="mt-4 text-sm text-gold-dark shimmer">
-            Subiendo {uploading} {uploading === 1 ? "foto" : "fotos"}… no cierres la app
+        {waiting > 0 && (
+          <p className={`mt-4 text-sm ${queue.online && !queue.waitingSignal ? "text-gold-dark shimmer" : "text-muted"}`}>
+            {queue.online && !queue.waitingSignal
+              ? `Subiendo ${waiting} ${waiting === 1 ? "foto" : "fotos"}…`
+              : `📶 ${queue.online ? "Señal débil" : "Sin señal"}: ${waiting} ${waiting === 1 ? "foto guardada" : "fotos guardadas"} en tu celular. Se subirán solas cuando mejore la señal; no hace falta que hagas nada.`}
           </p>
         )}
-        {uploading === 0 && items.some((i) => i.state === "done") && failed.length === 0 && (
+        {waiting === 0 && savedSome && queue.stuck === 0 && !queue.busy && (
           <p className="mt-4 text-sm text-green-800">✓ ¡Fotos guardadas! La IA ya las está calificando.</p>
         )}
       </section>
 
-      {failed.length > 0 && (
-        <section className="card p-4 mt-4">
-          <p className="text-sm font-semibold text-red-800 mb-2">No se pudieron subir {failed.length}:</p>
-          <ul className="flex flex-col gap-2">
-            {failed.map((i) => (
-              <li key={i.key} className="flex items-center justify-between gap-2 text-sm">
-                <span className="truncate text-muted">{i.error}</span>
-                <button className="btn btn-outline py-1 px-3 text-xs" onClick={() => retry(i.key)}>
-                  Reintentar
-                </button>
-              </li>
-            ))}
-          </ul>
+      {queue.stuck > 0 && (
+        <section className="card p-4 mt-4 text-sm">
+          <p className="font-semibold text-red-800">
+            {queue.stuck} {queue.stuck === 1 ? "foto no se pudo subir" : "fotos no se pudieron subir"}
+          </p>
+          <p className="text-muted mt-1">{queue.stuckReason}</p>
+          <button className="btn btn-outline py-1 px-3 text-xs mt-2" onClick={() => void retryStuck()}>
+            Reintentar
+          </button>
         </section>
       )}
 
+      <Challenges
+        challenges={challenges}
+        active={activeChallenge}
+        onPick={(c) => setActiveChallenge(c?.id === activeChallenge?.id ? null : c)}
+      />
+
       <p className="text-xs text-center text-muted mt-6 px-4">
-        Tus fotos se guardan de forma privada y no se pueden borrar. Se revelarán las mejores al final de la fiesta.
+        Tus fotos se guardan primero en tu celular y se suben aunque haya mala señal. No se pueden borrar. Se revelarán
+        las mejores al final de la fiesta.
       </p>
 
-      <Link href="/ranking" className="btn btn-outline mt-6 self-center">
-        🏆 Ver ranking de fotógrafos
-      </Link>
+      <div className="flex flex-col gap-3 mt-6 items-center">
+        <Link href="/dedicatoria" className="btn btn-outline">
+          💌 Dejar una dedicatoria a los novios
+        </Link>
+        <Link href="/ranking" className="btn btn-outline">
+          🏆 Ver ranking de fotógrafos
+        </Link>
+      </div>
     </main>
   );
 }

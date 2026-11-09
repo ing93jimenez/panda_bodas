@@ -43,6 +43,8 @@ export async function PATCH(req: Request) {
   }
   const { count } = await db().from("photos").select("id", { count: "exact", head: true }).eq("guest_id", id);
   if ((count ?? 0) > 0) return fail("No se puede eliminar: ese invitado ya tiene fotos", 409);
+  const { count: msgs } = await db().from("messages").select("id", { count: "exact", head: true }).eq("guest_id", id);
+  if ((msgs ?? 0) > 0) return fail("No se puede eliminar: ese invitado ya dejó una dedicatoria", 409);
   const { error } = await db().from("guests").delete().eq("id", id);
   if (error) return fail(error.message, 500);
   return ok({ ok: true });
