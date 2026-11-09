@@ -16,13 +16,14 @@ export type AdminPhoto = {
   height: number | null;
   createdAt: string;
   rank: number | null;
+  deleted: boolean;
 };
 
 export type AdminState = {
   event: EventRow;
   videoUrl: string | null;
   board: LeaderboardEntry[];
-  guests: { id: string; name: string; claimed: boolean; photos: number }[];
+  guests: { id: string; name: string; claimed: boolean; photos: number; canDelete: boolean }[];
   photos: AdminPhoto[];
-  stats: { total: number; pending: number; failed: number; byProvider: { claude: number; gemini: number } };
+  stats: { total: number; deleted: number; pending: number; failed: number; byProvider: { claude: number; gemini: number } };
 };

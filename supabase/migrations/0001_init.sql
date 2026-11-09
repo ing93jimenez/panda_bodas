@@ -66,3 +66,7 @@ values ('media', 'media', false, 52428800,
 -- 0002: desempate fino y cantidad del Top
 alter table public.photos add column fine_score int check (fine_score between 0 and 100);
 alter table public.event add column top_count int not null default 10 check (top_count between 1 and 50);
+
+-- 0003: eliminación por el admin (papelera recuperable; los invitados nunca pueden borrar)
+alter table public.photos add column deleted_at timestamptz;
+create index photos_deleted_idx on public.photos (deleted_at);

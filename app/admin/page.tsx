@@ -274,7 +274,7 @@ function Guests({ state, onChange }: { state: AdminState; onChange: () => void }
                   liberar
                 </button>
               )}
-              {g.photos === 0 && (
+              {g.canDelete && (
                 <button className="text-xs underline text-red-800" onClick={() => act(g.id, "delete", `¿Eliminar a ${g.name} de la lista?`)}>
                   eliminar
                 </button>
@@ -348,10 +348,29 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
     onChange();
   }
 
+  async function trash(photoIds: string[], restore: boolean, label: string) {
+    const msg = restore
+      ? `¿Restaurar ${label}?`
+      : `¿Eliminar ${label}?\n\nDejará de contar en el ranking, el Top, el video y las descargas. Podrás restaurarla desde “Eliminadas”.`;
+    if (!confirm(msg)) return;
+    try {
+      const r = await api<{ count: number }>("/api/admin/trash", { method: "POST", json: { photoIds, restore } });
+      setBusy(`✓ ${r.count} ${r.count === 1 ? "foto" : "fotos"} ${restore ? "restaurada(s)" : "eliminada(s)"}`);
+      setTimeout(() => setBusy(""), 2500);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+    onChange();
+  }
+
   const filteredGuest = state.guests.find((g) => g.name === filter);
 
-  const guests = Array.from(new Set(state.photos.map((p) => p.photographer))).sort();
-  const shown = state.photos.filter((p) => filter === "all" || (filter === "problems" ? p.status !== "scored" : p.photographer === filter));
+  const visible = state.photos.filter((p) => !p.deleted);
+  const guests = Array.from(new Set(visible.map((p) => p.photographer))).sort();
+  const shown =
+    filter === "deleted"
+      ? state.photos.filter((p) => p.deleted)
+      : visible.filter((p) => filter === "all" || (filter === "problems" ? p.status !== "scored" : p.photographer === filter));
 
   return (
     <div>
@@ -359,12 +378,13 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
         <button className="btn btn-gold py-2" onClick={rescore} disabled={!!busy}>
           🤖 Recalificar pendientes ({state.stats.pending + state.stats.failed})
         </button>
-        <button className="btn btn-outline py-2" onClick={downloadAll} disabled={!!busy || !state.photos.length}>
+        <button className="btn btn-outline py-2" onClick={downloadAll} disabled={!!busy || !visible.length}>
           ⬇️ Descargar todas (ZIP)
         </button>
         <select className="input w-auto py-2" value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="all">Todas (ordenadas por calificación)</option>
           <option value="problems">Pendientes / con error</option>
+          {state.stats.deleted > 0 && <option value="deleted">🗑️ Eliminadas ({state.stats.deleted})</option>}
           {guests.map((g) => (
             <option key={g} value={g}>
               {g}
@@ -398,7 +418,7 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {shown.map((p) => (
-          <div key={p.id} className="card overflow-hidden">
+          <div key={p.id} className={`card overflow-hidden ${p.deleted ? "opacity-60" : ""}`}>
             {p.url && (
               <a href={p.url} target="_blank" rel="noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -426,6 +446,12 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
               </p>
               {p.reason && <p className="text-muted line-clamp-3">{p.reason}</p>}
               {p.error && <p className="text-red-700 line-clamp-2">{p.error}</p>}
+              {p.deleted ? (
+                <button className="mt-1 text-xs underline text-gold-dark self-start" onClick={() => trash([p.id], true, "esta foto")}>
+                  ↩︎ Restaurar
+                </button>
+              ) : (
+              <>
               <select
                 className="mt-1 border border-gold-light rounded-md px-1 py-0.5 bg-white text-xs"
                 value=""
@@ -441,6 +467,14 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
                     </option>
                   ))}
               </select>
+              <button
+                className="mt-1 text-xs underline text-red-800 self-start"
+                onClick={() => trash([p.id], false, `esta foto de ${p.photographer}`)}
+              >
+                🗑️ Eliminar
+              </button>
+              </>
+              )}
             </div>
           </div>
         ))}

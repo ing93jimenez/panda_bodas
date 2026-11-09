@@ -16,8 +16,11 @@ export async function getGuests(): Promise<GuestRow[]> {
   return data as GuestRow[];
 }
 
-export async function getPhotos(): Promise<PhotoRow[]> {
-  const { data, error } = await db().from("photos").select("*").order("created_at");
+/** Fotos visibles. Las eliminadas por el admin quedan fuera salvo `includeDeleted`. */
+export async function getPhotos(opts?: { includeDeleted?: boolean }): Promise<PhotoRow[]> {
+  let q = db().from("photos").select("*").order("created_at");
+  if (!opts?.includeDeleted) q = q.is("deleted_at", null);
+  const { data, error } = await q;
   if (error) throw error;
   return data as PhotoRow[];
 }

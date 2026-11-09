@@ -7,6 +7,7 @@ import { api, ApiError, startPolling } from "@/lib/api";
 import { prepareImage } from "@/lib/compress";
 import { browserDb } from "@/lib/supabase/browser";
 import { Header } from "@/components/Header";
+import { InAppCamera } from "@/components/InAppCamera";
 
 type Me = {
   guest: { id: string; name: string } | null;
@@ -39,6 +40,8 @@ export default function Camara() {
   const [me, setMe] = useState<Me | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [flash, setFlash] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [nativeOnly, setNativeOnly] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const running = useRef(false);
@@ -97,7 +100,7 @@ export default function Camara() {
     void pump();
   }
 
-  function addFiles(files: FileList | null) {
+  function addFiles(files: FileList | File[] | null, withFlash = true) {
     if (!files?.length) return;
     const add: Item[] = Array.from(files).map((file) => ({
       key: `${Date.now()}-${Math.random()}`,
@@ -105,10 +108,19 @@ export default function Camara() {
       state: "queued",
     }));
     setItems((cur) => [...add, ...cur]);
-    setFlash(true);
-    setTimeout(() => setFlash(false), 250);
+    if (withFlash) {
+      setFlash(true);
+      setTimeout(() => setFlash(false), 250);
+    }
     enqueue(add);
   }
+
+  const onCameraUnavailable = useCallback(() => {
+    setCameraOpen(false);
+    setNativeOnly(true);
+  }, []);
+  const onCapture = useCallback((file: File) => addFiles([file], false), []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   function retry(key: string) {
     const it = items.find((i) => i.key === key);
@@ -139,6 +151,15 @@ export default function Camara() {
   return (
     <main className="flex-1 flex flex-col max-w-md w-full mx-auto px-4 pb-10">
       {flash && <div className="fixed inset-0 bg-white/80 pointer-events-none z-50" />}
+      {cameraOpen && (
+        <InAppCamera
+          onCapture={onCapture}
+          onClose={() => setCameraOpen(false)}
+          onUnavailable={onCameraUnavailable}
+          uploading={items.filter((i) => i.state === "queued" || i.state === "uploading").length}
+          photoCount={me?.photoCount ?? 0}
+        />
+      )}
       <Header coupleNames={me?.event.coupleNames} />
 
       <section className="card p-6 text-center fade-up">
@@ -155,13 +176,25 @@ export default function Camara() {
         </p>
 
         <div className="flex flex-col gap-3 mt-6">
-          <button className="btn btn-gold text-lg py-5" onClick={() => cameraRef.current?.click()}>
+          <button
+            className="btn btn-gold text-lg py-5"
+            onClick={() => (nativeOnly ? cameraRef.current?.click() : setCameraOpen(true))}
+          >
             📸 Tomar foto
           </button>
           <button className="btn btn-outline" onClick={() => galleryRef.current?.click()}>
             🖼️ Subir de mi galería
           </button>
         </div>
+        {nativeOnly ? (
+          <p className="text-xs text-muted mt-3">
+            No pudimos abrir la cámara dentro de la app (¿se negó el permiso?). Usaremos la cámara del celular.
+          </p>
+        ) : (
+          <button className="text-xs text-muted underline mt-3" onClick={() => cameraRef.current?.click()}>
+            Usar la cámara del celular
+          </button>
+        )}
 
         <input
           ref={cameraRef}

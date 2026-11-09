@@ -33,6 +33,7 @@ export interface PhotoRow {
   ai_provider: string | null;
   manual_override: boolean;
   error: string | null;
+  deleted_at: string | null;
   created_at: string;
 }
 

@@ -33,6 +33,6 @@ export async function POST(req: Request) {
 
   after(() => scorePhoto(data.id));
 
-  const { count } = await db().from("photos").select("id", { count: "exact", head: true }).eq("guest_id", me.id);
+  const { count } = await db().from("photos").select("id", { count: "exact", head: true }).eq("guest_id", me.id).is("deleted_at", null);
   return ok({ id: data.id, photoCount: count ?? 0 });
 }

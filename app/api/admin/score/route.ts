@@ -19,6 +19,7 @@ export async function POST() {
     .from("photos")
     .select("id")
     .in("status", ["pending", "failed"])
+    .is("deleted_at", null)
     .order("created_at")
     .limit(BATCH);
   const ids = (data ?? []).map((p) => p.id);
@@ -27,6 +28,7 @@ export async function POST() {
   const { count } = await db()
     .from("photos")
     .select("id", { count: "exact", head: true })
-    .in("status", ["pending", "failed"]);
+    .in("status", ["pending", "failed"])
+    .is("deleted_at", null);
   return ok({ processed: ids.length, remaining: count ?? 0 });
 }
