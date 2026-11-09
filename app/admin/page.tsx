@@ -444,8 +444,13 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
                     ? "❌ error"
                     : "⏳ calificando"}
               </p>
-              {p.reason && <p className="text-muted line-clamp-3">{p.reason}</p>}
-              {p.error && <p className="text-red-700 line-clamp-2">{p.error}</p>}
+              {p.reason && <p className="text-ink/80 text-[13px] leading-snug">{p.reason}</p>}
+              {p.error && (
+                <details className="text-red-700">
+                  <summary className="cursor-pointer">Ver detalle del error</summary>
+                  <p className="mt-1 break-words">{p.error}</p>
+                </details>
+              )}
               {p.deleted ? (
                 <button className="mt-1 text-xs underline text-gold-dark self-start" onClick={() => trash([p.id], true, "esta foto")}>
                   ↩︎ Restaurar
