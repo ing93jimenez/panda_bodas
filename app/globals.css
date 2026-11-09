@@ -1,26 +1,86 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-ivory: #faf6ee;
+  --color-cream: #f2ead9;
+  --color-gold: #b08d57;
+  --color-gold-dark: #8a6a3a;
+  --color-gold-light: #e3d3b3;
+  --color-ink: #2d2620;
+  --color-muted: #7a6e62;
+  --font-serif: var(--font-serif), Georgia, serif;
+  --font-sans: var(--font-sans), system-ui, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ivory);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
+
+.title {
+  font-family: var(--font-serif);
+  letter-spacing: 0.01em;
+}
+
+.ornament {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-gold);
+}
+.ornament::before,
+.ornament::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--color-gold), transparent);
+}
+
+.card {
+  background: #fffdf8;
+  border: 1px solid var(--color-gold-light);
+  border-radius: 1.25rem;
+  box-shadow: 0 8px 30px -12px rgba(138, 106, 58, 0.25);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.85rem 1.5rem;
+  font-weight: 600;
+  transition: transform 0.1s, opacity 0.2s, background 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; pointer-events: none; }
+.btn-gold { background: var(--color-gold); color: white; }
+.btn-gold:hover { background: var(--color-gold-dark); }
+.btn-outline { border: 1px solid var(--color-gold); color: var(--color-gold-dark); background: transparent; }
+.btn-outline:hover { background: var(--color-cream); }
+.btn-danger { background: #9b3b2f; color: white; }
+
+.input {
+  width: 100%;
+  border: 1px solid var(--color-gold-light);
+  background: white;
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  outline: none;
+}
+.input:focus { border-color: var(--color-gold); box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.2); }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up { animation: fadeUp 0.7s ease both; }
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.shimmer { animation: shimmer 1.6s ease-in-out infinite; }
