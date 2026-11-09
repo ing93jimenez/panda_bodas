@@ -334,6 +334,22 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
     onChange();
   }
 
+  async function move(photoIds: string[], toGuestId: string, label: string) {
+    const to = state.guests.find((g) => g.id === toGuestId);
+    if (!to || !confirm(`¿Mover ${label} a ${to.name}?`)) return;
+    try {
+      const r = await api<{ moved: number }>("/api/admin/move", { method: "POST", json: { photoIds, toGuestId } });
+      setBusy(`✓ ${r.moved} ${r.moved === 1 ? "foto movida" : "fotos movidas"} a ${to.name}`);
+      setTimeout(() => setBusy(""), 2500);
+      if (filter !== "all" && filter !== "problems") setFilter(to.name);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+    onChange();
+  }
+
+  const filteredGuest = state.guests.find((g) => g.name === filter);
+
   const guests = Array.from(new Set(state.photos.map((p) => p.photographer))).sort();
   const shown = state.photos.filter((p) => filter === "all" || (filter === "problems" ? p.status !== "scored" : p.photographer === filter));
 
@@ -357,6 +373,29 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
         </select>
         {busy && <span className="text-sm text-gold-dark shimmer">{busy}</span>}
       </div>
+      {filteredGuest && shown.length > 0 && (
+        <div className="card p-3 mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span>
+            Mover las {shown.length} fotos de <b>{filteredGuest.name}</b> a:
+          </span>
+          <select
+            className="input w-auto py-1"
+            value=""
+            onChange={(e) =>
+              e.target.value && move(shown.map((p) => p.id), e.target.value, `las ${shown.length} fotos de ${filteredGuest.name}`)
+            }
+          >
+            <option value="">Elegir invitado…</option>
+            {state.guests
+              .filter((g) => g.id !== filteredGuest.id)
+              .map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {shown.map((p) => (
           <div key={p.id} className="card overflow-hidden">
@@ -387,6 +426,21 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
               </p>
               {p.reason && <p className="text-muted line-clamp-3">{p.reason}</p>}
               {p.error && <p className="text-red-700 line-clamp-2">{p.error}</p>}
+              <select
+                className="mt-1 border border-gold-light rounded-md px-1 py-0.5 bg-white text-xs"
+                value=""
+                title="Mover esta foto a otro invitado"
+                onChange={(e) => e.target.value && move([p.id], e.target.value, `esta foto de ${p.photographer}`)}
+              >
+                <option value="">↪ Mover a…</option>
+                {state.guests
+                  .filter((g) => g.id !== p.guestId)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+              </select>
             </div>
           </div>
         ))}
