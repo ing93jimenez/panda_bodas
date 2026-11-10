@@ -53,6 +53,7 @@ export async function GET() {
         createdAt: p.created_at,
         rank: rankIndex.get(p.id) ?? null,
         deleted: !!p.deleted_at,
+        people: p.people ?? [],
         challenge: p.challenge_id
           ? { title: challengeTitles.get(p.challenge_id) ?? "", ok: p.challenge_ok, manual: p.challenge_manual }
           : null,

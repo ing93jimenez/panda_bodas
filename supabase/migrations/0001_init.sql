@@ -108,3 +108,17 @@ update storage.buckets
 set allowed_mime_types = array['image/jpeg','image/png','image/webp','video/mp4','video/webm',
                                'audio/mp4','audio/webm','audio/mpeg','audio/aac','audio/ogg','audio/x-m4a']
 where id = 'media';
+
+-- 0005: personas clave (fotos de referencia para la IA) y contexto de la boda
+create table public.people (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 80),
+  role text not null check (char_length(role) between 1 and 80),
+  photo_path text not null,
+  sort int not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table public.people enable row level security;
+
+alter table public.photos add column people text[] not null default '{}';
+alter table public.event add column ai_context text not null default '' check (char_length(ai_context) <= 1000);

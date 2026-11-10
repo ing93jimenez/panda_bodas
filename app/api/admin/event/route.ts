@@ -7,6 +7,7 @@ const Body = z.object({
   coupleNames: z.string().trim().min(1).max(100).optional(),
   eventDate: z.iso.date().nullable().optional(),
   minPhotos: z.number().int().min(1).max(100).optional(),
+  aiContext: z.string().trim().max(1000).optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -21,6 +22,7 @@ export async function PATCH(req: Request) {
       ...(b.coupleNames !== undefined && { couple_names: b.coupleNames }),
       ...(b.eventDate !== undefined && { event_date: b.eventDate }),
       ...(b.minPhotos !== undefined && { min_photos_for_winner: b.minPhotos }),
+      ...(b.aiContext !== undefined && { ai_context: b.aiContext }),
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1);

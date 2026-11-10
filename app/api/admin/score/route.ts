@@ -6,10 +6,18 @@ import { ok } from "@/lib/http";
 export const maxDuration = 60;
 const BATCH = 6;
 
-/** Recalifica fotos pendientes, fallidas o atascadas, en lotes. */
-export async function POST() {
+/**
+ * Recalifica fotos pendientes, fallidas o atascadas, en lotes.
+ * Con `{ all: true }` primero marca TODAS para recalificar (p. ej. tras cargar
+ * las personas clave); conservan su calificación actual hasta que la IA termine.
+ */
+export async function POST(req: Request) {
   const denied = await requireAdmin();
   if (denied) return denied;
+  const body = await req.json().catch(() => ({}));
+  if (body?.all === true) {
+    await db().from("photos").update({ status: "pending" }).eq("status", "scored").is("deleted_at", null);
+  }
 
   // Fotos "calificando" por más de 3 minutos se consideran atascadas.
   const stale = new Date(Date.now() - 3 * 60_000).toISOString();

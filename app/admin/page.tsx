@@ -10,9 +10,10 @@ import { QR } from "@/components/QR";
 import { VideoMaker } from "@/components/admin/VideoMaker";
 import { ChallengesAdmin } from "@/components/admin/ChallengesAdmin";
 import { MessagesAdmin } from "@/components/admin/MessagesAdmin";
+import { PeopleAdmin } from "@/components/admin/PeopleAdmin";
 import type { AdminState } from "@/components/admin/types";
 
-type Tab = "resumen" | "invitados" | "fotos" | "retos" | "dedicatorias" | "video";
+type Tab = "resumen" | "invitados" | "personas" | "fotos" | "retos" | "dedicatorias" | "video";
 
 export default function Admin() {
   const [state, setState] = useState<AdminState | null>(null);
@@ -61,12 +62,13 @@ export default function Admin() {
 
       <EndControls state={state} onChange={load} />
 
-      <nav className="flex gap-2 my-6 overflow-x-auto">
+      <nav className="flex flex-wrap gap-2 my-6">
         {(
           [
             ["resumen", "Resumen"],
             ["invitados", `Invitados (${state.guests.length})`],
             ["fotos", `Fotos (${state.stats.total})`],
+            ["personas", "👥 Personas clave"],
             ["retos", "🎯 Retos"],
             ["dedicatorias", "💌 Dedicatorias"],
             ["video", "Video"],
@@ -81,6 +83,7 @@ export default function Admin() {
       {tab === "resumen" && <Summary state={state} onChange={load} />}
       {tab === "invitados" && <Guests state={state} onChange={load} />}
       {tab === "fotos" && <Photos state={state} onChange={load} />}
+      {tab === "personas" && <PeopleAdmin state={state} onChange={load} />}
       {tab === "retos" && <ChallengesAdmin onChange={load} />}
       {tab === "dedicatorias" && <MessagesAdmin />}
       {tab === "video" && <VideoMaker state={state} onDone={load} />}
@@ -456,6 +459,7 @@ function Photos({ state, onChange }: { state: AdminState; onChange: () => void }
                     : "⏳ calificando"}
               </p>
               {p.reason && <p className="text-ink/80 text-[13px] leading-snug">{p.reason}</p>}
+              {p.people.length > 0 && <p className="text-ink/80">👥 {p.people.join(", ")}</p>}
               {p.challenge && (
                 <div className="rounded-md bg-cream px-2 py-1">
                   <p>

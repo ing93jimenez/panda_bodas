@@ -11,6 +11,7 @@ export interface EventRow {
   top_photo_ids: string[];
   top_count: number;
   video_path: string | null;
+  ai_context: string;
 }
 
 export interface GuestRow {
@@ -39,7 +40,16 @@ export interface PhotoRow {
   challenge_id: string | null;
   challenge_ok: boolean | null;
   challenge_manual: boolean;
+  people: string[];
   created_at: string;
+}
+
+export interface PersonRow {
+  id: string;
+  name: string;
+  role: string;
+  photo_path: string;
+  sort: number;
 }
 
 export interface ChallengeRow {

@@ -1,8 +1,9 @@
 import "server-only";
 import { db, BUCKET } from "@/lib/supabase/admin";
 import { scoreImage } from "@/lib/ai/score";
+import type { ImageData, MediaType, RefPerson } from "@/lib/ai/prompt";
 import { buildLeaderboard, pickWinner, rankPhotos } from "@/lib/ranking";
-import type { ChallengeRow, EventRow, GuestRow, PhotoRow } from "@/lib/types";
+import type { ChallengeRow, EventRow, GuestRow, PersonRow, PhotoRow } from "@/lib/types";
 
 export async function getEvent(): Promise<EventRow> {
   const { data, error } = await db().from("event").select("*").eq("id", 1).single();
@@ -56,6 +57,40 @@ export async function signedUrls(paths: string[], opts?: { download?: boolean })
   return map;
 }
 
+async function downloadImage(path: string): Promise<ImageData> {
+  const { data: blob, error } = await db().storage.from(BUCKET).download(path);
+  if (error || !blob) throw new Error(`No se pudo leer la imagen: ${error?.message}`);
+  const mediaType = (["image/jpeg", "image/png", "image/webp"].includes(blob.type) ? blob.type : "image/jpeg") as MediaType;
+  return { b64: Buffer.from(await blob.arrayBuffer()).toString("base64"), mediaType };
+}
+
+export async function getPeople(): Promise<PersonRow[]> {
+  const { data, error } = await db().from("people").select("*").order("sort").order("created_at");
+  if (error) throw error;
+  return data as PersonRow[];
+}
+
+// Las fotos de referencia casi no cambian: se guardan en memoria del servidor.
+const refCache = new Map<string, ImageData>();
+
+async function getRefs(): Promise<RefPerson[]> {
+  const people = await getPeople();
+  const refs: RefPerson[] = [];
+  for (const p of people) {
+    let img = refCache.get(p.photo_path);
+    if (!img) {
+      try {
+        img = await downloadImage(p.photo_path);
+        refCache.set(p.photo_path, img);
+      } catch {
+        continue; // una referencia rota no debe impedir calificar
+      }
+    }
+    refs.push({ ...img, name: p.name, role: p.role });
+  }
+  return refs;
+}
+
 /** Califica una foto con IA. Seguro de llamar varias veces (reclama la foto antes). */
 export async function scorePhoto(photoId: string): Promise<void> {
   const { data: claimed } = await db()
@@ -69,22 +104,17 @@ export async function scorePhoto(photoId: string): Promise<void> {
   const photo = claimed as PhotoRow;
 
   try {
-    const { data: blob, error } = await db().storage.from(BUCKET).download(photo.storage_path);
-    if (error || !blob) throw new Error(`No se pudo leer la foto: ${error?.message}`);
-    const mediaType = (["image/jpeg", "image/png", "image/webp"].includes(blob.type) ? blob.type : "image/jpeg") as
-      | "image/jpeg"
-      | "image/png"
-      | "image/webp";
-    const b64 = Buffer.from(await blob.arrayBuffer()).toString("base64");
+    const [image, refs, event] = await Promise.all([downloadImage(photo.storage_path), getRefs(), getEvent()]);
     let challenge: string | undefined;
     if (photo.challenge_id) {
       const { data: c } = await db().from("challenges").select("title").eq("id", photo.challenge_id).maybeSingle();
       challenge = c?.title;
     }
-    const r = await scoreImage(b64, mediaType, challenge);
+    const r = await scoreImage({ image, refs, challenge, context: event.ai_context });
     const update: Record<string, unknown> = {
       status: "scored",
       ai_provider: r.provider,
+      people: r.people_present,
     };
     if (!photo.manual_override) Object.assign(update, { score: r.score, fine_score: r.fine_score, ai_reason: r.reason });
     if (challenge && !photo.challenge_manual) update.challenge_ok = r.challenge_met;
